@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html>
+	<head>
+
+		<title>TradingView Charting Library demo -- Mobile (black)</title>
+
+		<!-- Fix for iOS Safari zooming bug -->
+		<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,minimum-scale=1.0">
+		<meta http-equiv="X-UA-Compatible" content="IE=Edge">
+
+		<script type="text/javascript" src="charting_library/charting_library.standalone.js"></script>
+		<script type="text/javascript" src="datafeeds/udf/dist/polyfills.js"></script>
+		<script type="text/javascript" src="datafeeds/udf/dist/bundle.js"></script>
+
+		<script type="text/javascript">
+
+			const queryString = window.location.search;
+			const urlParams = new URLSearchParams(queryString);
+			const coin = urlParams.get('coin')
+			const lang = urlParams.get('lang')
+			const from = urlParams.get('from')
+			const baseCurrency = urlParams.get('baseCurrency')
+      const interval = urlParams.get('interval') || '15'
+			const theme = urlParams.get('theme') || 'Dark';
+			
+
+			function getParameterByName(name) {
+				name = name.replace(/[\[]/, "\\[").replace(/[\]]/, "\\]");
+				var regex = new RegExp("[\\?&]" + name + "=([^&#]*)"),
+					results = regex.exec(location.search);
+				return results === null ? "" : decodeURIComponent(results[1].replace(/\+/g, " "));
+			}
+
+			function emitEvent(event) {
+				window.ReactNativeWebView && window.ReactNativeWebView.postMessage(event);
+			}
+
+		  function initOnReady() {
+				var widget = window.tvWidget = new TradingView.widget({
+					symbol: `${coin.toUpperCase()}/${baseCurrency}`,
+					interval: `${interval}`,
+					fullscreen: true,
+					container_id: "tv_chart_container",
+					study_count_limit: 10,
+					//	BEWARE: no trailing slash is expected in feed URL
+					datafeed: new Datafeeds.UDFCompatibleDatafeed("https://api.market.vndc.io/v1/candlestick", "wss://market.vndc.io/ws/candlesticks"),
+					library_path: "charting_library/",
+					locale: lang || "en",
+					numeric_formatting: { decimal_sign: "," },
+					preset: "mobile",
+					theme: theme,
+					custom_css_url: '../themed.css',
+					disabled_features: ["compare_symbol", "display_market_status", "go_to_date", "use_localstorage_for_settings", "header_interval_dialog_button", "header_settings", "timeframes_toolbar", "show_chart_property_page", "source_selection_markers", "header_symbol_search", "header_compare", "header_undo_redo", "border_around_the_chart", "header_fullscreen_button", "header_screenshot", "volume_force_overlay"],
+          enabled_features: ["side_toolbar_in_fullscreen_mode", "header_in_fullscreen_mode", "no_min_chart_width", "header_widget"],
+					overrides: {
+						"paneProperties.background": "#1B222D",
+						"paneProperties.vertGridProperties.width": 0,
+						"paneProperties.horzGridProperties.color": "transparent",
+						"paneProperties.horzGridProperties.style": 3,
+						"paneProperties.vertGridProperties.color": "#2B3247",
+						"scalesProperties.textColor" : "#8492A7",
+						"scalesProperties.lineColor" : "transparent",
+						"mainSeriesProperties.candleStyle.upColor": "#0DB787",
+						"mainSeriesProperties.candleStyle.downColor": "#DC1F4E",
+						"mainSeriesProperties.candleStyle.borderUpColor": "#0DB787",
+						"mainSeriesProperties.candleStyle.borderDownColor": "#DC1F4E",
+						"volumePaneSize": "small",
+					},
+					studies_overrides: {
+						"volume.volume ma.color": "orange",
+    				"volume.volume ma.linewidth": 1,
+						"volume.volume ma.visible": true,
+					},
+					loading_screen: { backgroundColor: "#1B222D", foregroundColor: '#1B222D' },
+					timezone: "Asia/Ho_Chi_Minh",
+					charts_storage_api_version: "1.1",
+				});
+				const timeCurrent = new Date().getTime() / 1000;
+				widget.onChartReady(function() {
+					var mutil = 1;
+					if (interval === '1') {
+						mutil = 1 / 15;
+					} else if (interval === '15') {
+            mutil = 1;
+          } else if (interval === '30') {
+            mutil = 2;
+          } else if (interval === '60') {
+            mutil = 4;
+          } else if (interval === '240') {
+            mutil = 16;
+          } else if (interval === '1D') {
+            mutil = 96;
+          } else if (interval === '1W') {
+            mutil = 672;
+          } else if (interval === '1M') {
+            mutil = 2880;
+          } else {
+            mutil = 1;
+          }
+					// if (configChart !== '' && configChart) {
+					// 	const charts = JSON.parse(configChart);
+					// 	emitEvent(`receiveChart::${JSON.parse(charts)}`);
+					// 	widget.load(JSON.parse(charts));
+					// }
+
+          widget.subscribe('study_event', (studyId, eventType) => {
+            emitEvent(`eventStudy::${JSON.stringify(studyId)}::${JSON.stringify(eventType)}`);
+						setTimeout(() => {
+							widget.save((data) => { 
+								emitEvent(`configChart::${JSON.stringify(data)}`);
+					 		})
+						 }, 500);
+    			})
+          
+
+          widget.activeChart().onIntervalChanged().subscribe(null, (newInterval, timeframeObj) => {
+						emitEvent(`interval::${JSON.stringify(newInterval)}`);
+					})
+
+          widget.activeChart().setVisibleRange(
+						{ from: (timeCurrent - 20 * 60 * 30 * mutil), to: timeCurrent },
+						{ percentRightMargin: 10 }).then(() => console.log('New visible range is applied'));
+					
+				})
+			};
+			window.addEventListener('DOMContentLoaded', initOnReady, true);
+		</script>
+
+	</head>
+
+	<body style="margin:-1px; background-color:#1B222D">
+		<div id="tv_chart_container"></div>
+	</body>
+
+</html>
